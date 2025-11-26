@@ -36,6 +36,8 @@ from lerobot.common.envs.utils import close_envs
 from lerobot.common.optim.factory import make_optimizer_and_scheduler
 from lerobot.common.policies.factory import make_policy
 from lerobot.common.policies.pretrained import PreTrainedPolicy
+from lerobot.common.reward_models.qwen_vl import QwenVLRewardModel
+from lerobot.common.reward_models.gvl_reward import GVLRewardModel
 from lerobot.common.utils.logging_utils import AverageMeter, MetricsTracker
 from lerobot.common.utils.random_utils import set_seed
 from lerobot.common.utils.train_utils import (
@@ -67,10 +69,21 @@ def update_policy(
     lr_scheduler=None,
     step: int = 0,
     loss_threshold: float = 0.04,
+    reward_model=None,
+    reward_alignment=None,
 ) -> tuple[MetricsTracker, dict]:
     start_time = time.perf_counter()
 
-    loss, output_dict = policy.forward(batch)
+    if reward_model is not None and reward_alignment is not None and hasattr(policy, "reward_aligned_forward"):
+        loss, output_dict = policy.reward_aligned_forward(
+            batch,
+            reward_model,
+            num_candidates=reward_alignment.num_candidates,
+            temperature=reward_alignment.temperature,
+            reward_image_key=reward_alignment.image_key,
+        )
+    else:
+        loss, output_dict = policy.forward(batch)
     # TODO(rcadene): policy.unnormalize_outputs(out_dict)
     loss = loss.mean()
     train_metrics.forward_s = time.perf_counter() - start_time
@@ -216,6 +229,38 @@ def train(cfg: TrainPipelineConfig):
     # when use accelerate, we compile the policy through accelerate config
     policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, compile=False, strict=cfg.strict)
     accelerator.wait_for_everyone()
+
+    reward_model = None
+    if cfg.reward_alignment.enabled:
+        dtype_map = {
+            "float16": torch.float16,
+            "bfloat16": torch.bfloat16,
+            "float32": torch.float32,
+        }
+        reward_dtype = dtype_map.get(cfg.reward_alignment.dtype)
+
+        # Choose reward model type based on config
+        reward_model_type = getattr(cfg.reward_alignment, "model_type", "qwen_vl")
+
+        if reward_model_type == "gvl":
+            logging.info("Using GVL instruction reward model")
+            reward_model = GVLRewardModel(
+                model_id=cfg.reward_alignment.model_id,
+                device=device,
+                dtype=reward_dtype,
+                reduction=getattr(cfg.reward_alignment, "reduction", "mean"),
+                use_video=getattr(cfg.reward_alignment, "use_video", False),
+                fps=getattr(cfg.reward_alignment, "fps", 2.0),
+            )
+        else:
+            logging.info("Using QwenVL action-based reward model")
+            reward_model = QwenVLRewardModel(
+                model_id=cfg.reward_alignment.model_id,
+                device=device,
+                dtype=reward_dtype,
+                prompt_template=cfg.reward_alignment.prompt_template,
+            )
+
     logging.info("Creating optimizer and scheduler")
     # https://huggingface.co/docs/accelerate/concept_guides/performance
     # cfg.scheduler.num_warmup_steps *= accelerator.num_processes
@@ -329,6 +374,8 @@ def train(cfg: TrainPipelineConfig):
                     lr_scheduler=lr_scheduler,
                     step=current_opt_step,
                     loss_threshold=cfg.loss_threshold,
+                    reward_model=reward_model,
+                    reward_alignment=cfg.reward_alignment,
                 )
 
             # if output_dict["l2_loss"] > cfg.loss_threshold and current_opt_step > 10000:

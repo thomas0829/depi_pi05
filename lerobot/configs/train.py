@@ -33,6 +33,22 @@ TRAIN_CONFIG_NAME = "train_config.json"
 
 
 @dataclass
+class RewardAlignmentConfig:
+    enabled: bool = False
+    model_type: str = "qwen_vl"  # "qwen_vl" or "gvl"
+    model_id: str = "Qwen/Qwen2-VL-2B-Instruct"
+    num_candidates: int = 4
+    temperature: float = 0.7
+    image_key: str | None = None
+    dtype: str | None = "bfloat16"
+    prompt_template: str | None = None  # For qwen_vl model type
+    # GVL-specific options
+    reduction: str = "mean"  # "mean" or "sum" for GVL
+    use_video: bool = False  # Whether to use video input for GVL
+    fps: float = 2.0  # Frames per second for GVL video input
+
+
+@dataclass
 class TrainPipelineConfig(HubMixin):
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     num_datasets: int = 100
@@ -73,6 +89,7 @@ class TrainPipelineConfig(HubMixin):
     test_dataloader: bool = False
     num_epochs: int = 1
     ddp_timeout_s: int = 6000
+    reward_alignment: RewardAlignmentConfig = field(default_factory=RewardAlignmentConfig)
 
     def __post_init__(self):
         self.checkpoint_path = None
