@@ -73,6 +73,8 @@ class TrainPipelineConfig(HubMixin):
     test_dataloader: bool = False
     num_epochs: int = 1
     ddp_timeout_s: int = 6000
+    # Rename map for the observation to override the image and state keys
+    rename_map: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         self.checkpoint_path = None
@@ -99,21 +101,61 @@ class TrainPipelineConfig(HubMixin):
             self.policy = PreTrainedConfig.from_pretrained(policy_path, cli_overrides=[])
             for override in cli_overrides:
                 override = override[2:]
-                attr, val = override.split("=")
-                if val.lower() == "true":
-                    val = True
-                elif val.lower() == "false":
-                    val = False
+                attr, val = override.split("=", 1)  # Use split with maxsplit=1 to handle JSON values
+                
+                # Special handling for normalization_mapping with JSON format
+                if attr == "normalization_mapping":
+                    import json
+                    from lerobot.configs.types import NormalizationMode
+                    mapping_dict = json.loads(val)
+                    self.policy.normalization_mapping = {
+                        key: NormalizationMode[value] for key, value in mapping_dict.items()
+                    }
+                # Handle nested attributes like normalization_mapping.VISUAL
+                elif "." in attr:
+                    parts = attr.split(".")
+                    obj = self.policy
+                    for part in parts[:-1]:
+                        obj = getattr(obj, part)
+                    attr = parts[-1]
+                    
+                    # For normalization_mapping, convert string to enum
+                    if "normalization_mapping" in ".".join(parts[:-1]):
+                        from lerobot.configs.types import NormalizationMode
+                        val = NormalizationMode[val]
+                    else:
+                        if val.lower() == "true":
+                            val = True
+                        elif val.lower() == "false":
+                            val = False
+                        else:
+                            try:
+                                float_val = float(val)
+                                val = int(float_val) if float_val.is_integer() else float_val
+                            except ValueError:
+                                pass
+                    setattr(obj, attr, val)
                 else:
-                    try:
-                        float_val = float(val)
-                        val = int(float_val) if float_val.is_integer() else float_val
-                    except ValueError:
-                        pass
-                setattr(self.policy, attr, val)
+                    if val.lower() == "true":
+                        val = True
+                    elif val.lower() == "false":
+                        val = False
+                    else:
+                        try:
+                            float_val = float(val)
+                            val = int(float_val) if float_val.is_integer() else float_val
+                        except ValueError:
+                            pass
+                    setattr(self.policy, attr, val)
             self.policy.pretrained_path = policy_path
             if self.resume:
                 self.checkpoint_path = Path(config_path).parent.parent
+        
+        # Parse rename_map if provided as string (JSON format)
+        if isinstance(self.rename_map, str):
+            import json
+            self.rename_map = json.loads(self.rename_map)
+        
         if not self.job_name:
             if self.env is None:
                 self.job_name = f"{self.policy.type}"

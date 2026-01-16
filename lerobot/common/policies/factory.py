@@ -32,7 +32,7 @@ from lerobot.common.policies.pretrained import PreTrainedPolicy
 from lerobot.common.policies.tdmpc.configuration_tdmpc import TDMPCConfig
 from lerobot.common.policies.vqbet.configuration_vqbet import VQBeTConfig
 from lerobot.configs.policies import PreTrainedConfig
-from lerobot.configs.types import FeatureType
+from lerobot.configs.types import FeatureType, PolicyFeature
 
 
 def get_policy_class(name: str) -> PreTrainedPolicy:
@@ -95,6 +95,7 @@ def make_policy(
     compile: bool = False,
     strict: bool = True,
     device: torch.device | None = None,
+    rename_map: dict[str, str] | None = None,
 ) -> PreTrainedPolicy:
     """Make an instance of a policy class.
 
@@ -146,6 +147,30 @@ def make_policy(
                 "by default without stats from a dataset."
             )
         features = env_to_policy_features(env_cfg)
+
+    # Apply rename_map to features if provided
+    if rename_map:
+        renamed_features = {}
+        for key, ft in features.items():
+            new_key = rename_map.get(key, key)
+            renamed_features[new_key] = ft
+        features = renamed_features
+    
+    # For PI05, adjust image feature shapes to match policy's image_resolution
+    from lerobot.common.policies.pi05.configuration_pi05 import PI05Config
+    if isinstance(cfg, PI05Config) and hasattr(cfg, 'image_resolution'):
+        adjusted_features = {}
+        for key, ft in features.items():
+            if ft.type == FeatureType.VISUAL:
+                # Update shape to use policy's configured image_resolution
+                adjusted_ft = PolicyFeature(
+                    type=ft.type,
+                    shape=(3, *cfg.image_resolution),
+                )
+                adjusted_features[key] = adjusted_ft
+            else:
+                adjusted_features[key] = ft
+        features = adjusted_features
 
     cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
     cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}

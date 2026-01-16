@@ -223,7 +223,7 @@ def train(cfg: TrainPipelineConfig):
         cfg.policy.pretrained_path = pretrained_model_path
     
     # when use accelerate, we compile the policy through accelerate config
-    policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, compile=False, strict=cfg.strict)
+    policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, strict=cfg.strict, rename_map=cfg.rename_map)
     
     # Enable gradient checkpointing if configured in policy config
     if hasattr(cfg.policy, 'gradient_checkpointing') and cfg.policy.gradient_checkpointing:

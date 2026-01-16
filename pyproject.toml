@@ -24,9 +24,6 @@ license = { text = "Apache-2.0" }
 requires-python = ">=3.10.13"
 keywords = ["robotics", "deep learning", "pytorch", "so100", "decentralized-data"]
 
-[project.scripts]
-depi-apply-transformers-patches = "scripts.apply_transformers_patches:main"
-
 dependencies = [
     "cmake>=3.29.0.1",
     "datasets>=4.0.0",
@@ -63,6 +60,9 @@ dependencies = [
     "safetensors==0.6.2",
     "pre-commit>=4.3.0",
 ]
+
+[project.scripts]
+depi-apply-transformers-patches = "scripts.apply_transformers_patches:main"
 
 [project.optional-dependencies]
 aloha = ["gym-aloha>=0.1.1 ; python_version < '4.0'"]
