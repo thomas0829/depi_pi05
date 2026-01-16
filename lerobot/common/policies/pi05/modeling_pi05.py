@@ -879,14 +879,17 @@ class PI05Policy(PreTrainedPolicy):
     def __init__(
         self,
         config: PI05Config,
+        rename_map: dict[str, str] | None = None,
     ):
         """
         Args:
             config: Policy configuration class instance.
+            rename_map: Optional mapping to rename batch keys at runtime
         """
         super().__init__(config)
         config.validate_features()
         self.config = config
+        self.rename_map = rename_map or {}
 
         # Initialize the core PI05 model
         self.init_rtc_processor()
@@ -1325,6 +1328,14 @@ class PI05Policy(PreTrainedPolicy):
 
         self.eval()
 
+        # Apply rename_map to batch keys if provided
+        if self.rename_map:
+            renamed_batch = {}
+            for key, value in batch.items():
+                new_key = self.rename_map.get(key, key)
+                renamed_batch[new_key] = value
+            batch = renamed_batch
+
         # Action queue logic for n_action_steps > 1
         if len(self._action_queue) == 0:
             actions = self.predict_action_chunk(batch)[:, : self.config.n_action_steps]
@@ -1337,6 +1348,14 @@ class PI05Policy(PreTrainedPolicy):
     def predict_action_chunk(self, batch: dict[str, Tensor], **kwargs: Unpack[ActionSelectKwargs]) -> Tensor:
         """Predict a chunk of actions given environment observations."""
         self.eval()
+
+        # Apply rename_map to batch keys if provided
+        if self.rename_map:
+            renamed_batch = {}
+            for key, value in batch.items():
+                new_key = self.rename_map.get(key, key)
+                renamed_batch[new_key] = value
+            batch = renamed_batch
 
         # Prepare inputs
         images, img_masks = self._preprocess_images(batch)
@@ -1363,6 +1382,14 @@ class PI05Policy(PreTrainedPolicy):
 
     def forward(self, batch: dict[str, Tensor]) -> tuple[Tensor, dict]:
         """Run the batch through the model and compute the loss for training."""
+
+        # Apply rename_map to batch keys if provided
+        if self.rename_map:
+            renamed_batch = {}
+            for key, value in batch.items():
+                new_key = self.rename_map.get(key, key)
+                renamed_batch[new_key] = value
+            batch = renamed_batch
 
         # Prepare inputs
         images, img_masks = self._preprocess_images(batch)

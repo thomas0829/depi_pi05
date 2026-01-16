@@ -175,6 +175,10 @@ def make_policy(
     cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
     cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
     kwargs["config"] = cfg
+    
+    # Add rename_map to kwargs for PI05 policy
+    if rename_map and cfg.type == "pi05":
+        kwargs["rename_map"] = rename_map
 
     if cfg.pretrained_path:
         # Load a pretrained policy and override the config if needed (for example, if there are inference-time
