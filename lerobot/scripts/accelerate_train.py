@@ -224,6 +224,21 @@ def train(cfg: TrainPipelineConfig):
     
     # when use accelerate, we compile the policy through accelerate config
     policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, compile=False, strict=cfg.strict)
+    
+    # Enable gradient checkpointing if configured in policy config
+    if hasattr(cfg.policy, 'gradient_checkpointing') and cfg.policy.gradient_checkpointing:
+        if hasattr(policy, 'enable_gradient_checkpointing'):
+            logging.info("Enabling gradient checkpointing for policy")
+            policy.enable_gradient_checkpointing()
+        elif hasattr(policy.model, 'enable_gradient_checkpointing'):
+            logging.info("Enabling gradient checkpointing for policy.model")
+            policy.model.enable_gradient_checkpointing()
+        elif hasattr(policy.model, 'gradient_checkpointing_enable'):
+            logging.info("Enabling gradient checkpointing for policy.model (transformers style)")
+            policy.model.gradient_checkpointing_enable()
+        else:
+            logging.warning("Gradient checkpointing requested but not supported by this policy")
+    
     accelerator.wait_for_everyone()
     logging.info("Creating optimizer and scheduler")
     # https://huggingface.co/docs/accelerate/concept_guides/performance

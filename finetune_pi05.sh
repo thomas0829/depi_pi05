@@ -6,10 +6,8 @@ export PRETRAINED_MODEL_PATH="thomas0829/pi05-pytorch-base"
 
 accelerate launch \
     --num_processes=${n_gpus} \
-    --num_machines=1 \
-    --mixed_precision=no \
-    --dynamo_backend=no \
     lerobot/scripts/accelerate_train.py \
+    --compile=false \
     --policy.type=pi05 \
     --dataset.repo_id="thomas0829/put_the_dolls_on_the_cloth" \
     --dataset.image_transforms.enable=true \
@@ -22,7 +20,8 @@ accelerate launch \
     --strict=false \
     --num_workers=4 \
     --log_freq=500 \
-    --gradient_accumulation_steps=8 \
+    --gradient_accumulation_steps=2 \
+    --policy.gradient_checkpointing=true \
     --policy.scheduler_decay_lr=1e-5 \
     --policy.scheduler_decay_steps=1000000 \
     --policy.optimizer_lr=1e-4 \
