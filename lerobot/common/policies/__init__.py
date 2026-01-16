@@ -20,6 +20,7 @@ Importing the configuration modules here ensures they are registered with
 from .act.configuration_act import ACTConfig as ACTConfig
 from .diffusion.configuration_diffusion import DiffusionConfig as DiffusionConfig
 from .pi0.configuration_pi0 import PI0Config as PI0Config
+from .pi05.configuration_pi05 import PI05Config as PI05Config
 from .pi0fast.configuration_pi0fast import PI0FASTConfig as PI0FASTConfig
 from .tdmpc.configuration_tdmpc import TDMPCConfig as TDMPCConfig
 from .vqbet.configuration_vqbet import VQBeTConfig as VQBeTConfig
@@ -28,6 +29,7 @@ __all__ = [
     "ACTConfig",
     "DiffusionConfig",
     "PI0Config",
+    "PI05Config",
     "PI0FASTConfig",
     "TDMPCConfig",
     "VQBeTConfig",

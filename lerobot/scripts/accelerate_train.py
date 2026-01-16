@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import os
 import time
 from contextlib import nullcontext
 from datetime import timedelta
@@ -214,6 +215,13 @@ def train(cfg: TrainPipelineConfig):
     # create policy
     logging.info("Creating policy")
     accelerator.wait_for_everyone()
+    
+    # Load from pretrained model if specified via environment variable
+    pretrained_model_path = os.environ.get("PRETRAINED_MODEL_PATH")
+    if pretrained_model_path:
+        logging.info(f"Loading pretrained model from: {pretrained_model_path}")
+        cfg.policy.pretrained_path = pretrained_model_path
+    
     # when use accelerate, we compile the policy through accelerate config
     policy = make_policy(cfg=cfg.policy, ds_meta=dataset.meta, compile=False, strict=cfg.strict)
     accelerator.wait_for_everyone()

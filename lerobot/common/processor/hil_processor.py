@@ -25,8 +25,8 @@ import torch
 import torchvision.transforms.functional as F  # noqa: N812
 
 from lerobot.configs.types import PipelineFeatureType, PolicyFeature
-from lerobot.teleoperators.teleoperator import Teleoperator
-from lerobot.teleoperators.utils import TeleopEvents
+from lerobot.common.teleoperators.teleoperator import Teleoperator
+from lerobot.common.teleoperators.utils import TeleopEvents
 
 from .core import EnvTransition, PolicyAction, TransitionKey
 from .pipeline import (
