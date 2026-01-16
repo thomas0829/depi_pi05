@@ -1416,9 +1416,13 @@ class PI05Policy(PreTrainedPolicy):
 
         loss = losses.mean()
 
+        # Convert loss_per_dim to separate keys for WandB compatibility
+        loss_per_dim = losses.mean(dim=[0, 1]).detach().cpu().numpy().tolist()
         loss_dict = {
             "loss": loss.item(),
-            "loss_per_dim": losses.mean(dim=[0, 1]).detach().cpu().numpy().tolist(),
         }
+        # Add each dimension as a separate key
+        for i, dim_loss in enumerate(loss_per_dim):
+            loss_dict[f"loss_dim_{i}"] = dim_loss
 
         return loss, loss_dict

@@ -17,7 +17,7 @@ accelerate launch \
     --dataset.image_transforms.enable=true \
     --batch_size=1 \
     --steps=70000 \
-    --save_freq=10000 \
+    --save_freq=5000 \
     --strict=true \
     --num_workers=4 \
     --log_freq=100 \
@@ -31,4 +31,6 @@ accelerate launch \
     --policy.private=false \
     --dataset.use_annotated_tasks=false \
     --job_name=pi05_training \
-    --wandb.enable=false
+    --wandb.enable=true \
+    --wandb.project="yam-pi05-finetune" \
+    --wandb.notes="Full fine-tuning of pi05 on put_the_dolls_on_the_cloth dataset"
