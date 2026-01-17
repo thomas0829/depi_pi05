@@ -200,20 +200,6 @@ accelerate launch --num_processes=${n_gpus} lerobot/scripts/accelerate_train.py 
     --wandb.entity=${wandb_entity}
 ```
 
-To enable reward-aligned behavioral cloning with a Qwen-VL reward model, add
-the reward flags. The example below keeps the default Qwen checkpoint and
-weights the behavioral cloning loss with reward-ranked samples drawn from the
-pi0 policy.
-
-```bash
-accelerate launch --num_processes=${n_gpus} lerobot/scripts/accelerate_train.py \
-    --policy.type=pi0 \
-    --reward_alignment.enabled=true \
-    --reward_alignment.model_id=Qwen/Qwen2-VL-2B-Instruct \
-    --reward_alignment.num_candidates=4 \
-    --reward_alignment.image_key=observation.images.0
-```
-
 Let's explain the command:
 1. We provided 3 ways to specify the datasets to train on:
     - `--num_datasets=$N` to train on first N decentralized-collected so100 datasets with huggingface ids from the list in [`data_ids/dataset_list_valid.json`](./data_ids/dataset_list_valid.json).
