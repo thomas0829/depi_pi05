@@ -96,7 +96,7 @@ def parse_args():
 
 
 def extract_frames_from_episode(dataset, episode_index: int, sample_interval: int = 1):
-    """Extract frames from a LeRobot episode.
+    """Extract frames using batch video decoding.
 
     Args:
         dataset: LeRobotDataset or LeRobotDatasetV3 instance.
@@ -106,67 +106,66 @@ def extract_frames_from_episode(dataset, episode_index: int, sample_interval: in
     Returns:
         Tuple of (frames_list, instruction_text, frame_indices, total_frames)
     """
-    # Get episode data indices
-    if hasattr(dataset, "meta") and hasattr(dataset.meta, "episodes"):
-        # V3 dataset
-        episodes = dataset.meta.episodes
-        if episodes is not None and episode_index < len(episodes):
-            ep_data = episodes[episode_index]
-            start_idx = ep_data.get("dataset_from_index", 0)
-            end_idx = ep_data.get("dataset_to_index", start_idx + ep_data.get("length", 0))
-        else:
-            raise ValueError(f"Episode {episode_index} not found in metadata")
-    elif hasattr(dataset, "episode_data_index"):
-        # V2.1 dataset
-        start_idx = dataset.episode_data_index["from"].get(episode_index, 0)
-        end_idx = dataset.episode_data_index["to"].get(episode_index, start_idx)
+    from lerobot.common.datasets.lerobot_dataset_v3 import LeRobotDatasetV3
+    from lerobot.common.datasets.video_utils import decode_video_frames
+
+    is_v3 = isinstance(dataset, LeRobotDatasetV3)
+
+    # Get episode boundaries
+    if is_v3:
+        ep_data = dataset.meta.episodes[episode_index]
+        start_idx = ep_data.get("dataset_from_index", 0)
+        end_idx = ep_data.get("dataset_to_index", start_idx + ep_data.get("length", 0))
     else:
-        raise ValueError("Cannot determine episode boundaries")
+        start_idx = dataset.episode_data_index["from"][episode_index]
+        end_idx = dataset.episode_data_index["to"][episode_index]
 
     total_frames = end_idx - start_idx
     sampled_indices = list(range(start_idx, end_idx, sample_interval))
 
-    # Import for version check
-    from lerobot.common.datasets.lerobot_dataset_v3 import LeRobotDatasetV3
+    # Get video key
+    video_keys = list(dataset.meta.video_keys)
+    if not video_keys:
+        raise ValueError("No video keys found in dataset")
+    camera_key = video_keys[0]
 
-    # Find camera key from first item
-    sample_item = dataset[sampled_indices[0]]
-    camera_key = next((k for k in sample_item if k.startswith("observation.images")), None)
-    if camera_key is None:
-        raise ValueError(f"No camera key found in dataset item: {list(sample_item.keys())}")
+    # Batch-fetch timestamps from parquet
+    if is_v3:
+        dataset._ensure_hf_dataset_loaded()
+    timestamps = [dataset.hf_dataset["timestamp"][idx].item() for idx in sampled_indices]
 
-    # V3: Column-first indexing (batch access is faster than per-item access)
-    if not isinstance(dataset, LeRobotDatasetV3):
-        raise ValueError("This script requires V3 datasets. Use modify_features which is V3-only.")
-    frames_data = dataset.hf_dataset[camera_key][sampled_indices]
+    # Get video path
+    video_path = dataset.root / dataset.meta.get_video_file_path(episode_index, camera_key)
 
-    # Process all frames
+    # V3 needs timestamp offset, V2.1 doesn't
+    if is_v3:
+        from_timestamp = ep_data[f"videos/{camera_key}/from_timestamp"]
+        shifted_timestamps = [from_timestamp + ts for ts in timestamps]
+    else:
+        shifted_timestamps = timestamps
+
+    # BATCH DECODE all frames at once
+    frames_tensor = decode_video_frames(
+        video_path, shifted_timestamps, dataset.tolerance_s, dataset.video_backend
+    )
+
+    # Convert to numpy HWC uint8
     frames = []
-    for frame in frames_data:
-        if hasattr(frame, "numpy"):
-            frame = frame.numpy()
-        if frame.shape[0] in [1, 3]:  # Channels first
-            frame = np.transpose(frame, (1, 2, 0))
-        if frame.max() <= 1.0:
-            frame = (frame * 255).astype(np.uint8)
-        frames.append(frame)
+    for frame in frames_tensor:
+        frame_np = frame.numpy()
+        if frame_np.shape[0] in [1, 3]:
+            frame_np = np.transpose(frame_np, (1, 2, 0))
+        if frame_np.max() <= 1.0:
+            frame_np = (frame_np * 255).astype(np.uint8)
+        frames.append(frame_np)
 
-    # Get instruction from first frame
-    first_item = dataset[start_idx]
-    instruction = first_item.get("task", "")
-    if (
-        (instruction is None or instruction == "")
-        and hasattr(dataset, "meta")
-        and hasattr(dataset.meta, "tasks")
-    ):
-        # Try to get from metadata
-        task_index = first_item.get("task_index", 0)
-        if hasattr(task_index, "item"):
-            task_index = task_index.item()
-        if hasattr(dataset.meta.tasks, "iloc"):
-            instruction = dataset.meta.tasks.iloc[task_index].name
-        elif isinstance(dataset.meta.tasks, dict):
-            instruction = dataset.meta.tasks.get(task_index, "")
+    # Get instruction
+    if is_v3:
+        task_idx = dataset.hf_dataset["task_index"][start_idx].item()
+        instruction = dataset.meta.tasks.iloc[task_idx].name
+    else:
+        task_idx = dataset.hf_dataset["task_index"][start_idx].item()
+        instruction = dataset.meta.tasks[task_idx]
 
     return frames, instruction, sampled_indices, total_frames
 
@@ -289,7 +288,8 @@ def annotate_dataset(
     # Import here to avoid circular imports and allow for PYTHONPATH setup
     from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
     from lerobot.common.datasets.lerobot_dataset_v3 import LeRobotDatasetV3
-    from lerobot.common.datasets.v3.dataset_tools import modify_features
+    from lerobot.common.datasets.v3.dataset_tools import modify_features as modify_features_v3
+    from lerobot.common.datasets.v21.dataset_tools import modify_features as modify_features_v21
     from opengvl.clients.qwen import QwenClient
 
     # Load dataset
@@ -330,9 +330,7 @@ def annotate_dataset(
             logger.warning(f"Episode {ep_idx} has fewer than 2 frames, using zero advantages")
             ep_advantages = np.zeros(ep_total_frames, dtype=np.float32)
         else:
-            logger.info(
-                f"Episode {ep_idx}: {ep_total_frames} frames, instruction: '{instruction[:50]}...'"
-            )
+            logger.info(f"Episode {ep_idx}: {ep_total_frames} frames, instruction: '{instruction[:50]}...'")
 
             # Get episode start index
             if is_v3:
@@ -375,13 +373,11 @@ def annotate_dataset(
         f"min={advantages_array.min():.4f}, max={advantages_array.max():.4f}"
     )
 
-    # Ensure the dataset is V3 for modify_features
-    if not is_v3:
-        logger.error("modify_features only works with V3 datasets. Please convert the dataset first.")
-        raise ValueError("Dataset must be V3 format to use modify_features")
-
     # Use modify_features to add the advantage column
     logger.info(f"Creating new dataset with advantage column at {output_dir / output_repo_id}")
+
+    # Select appropriate modify_features based on dataset version
+    modify_features = modify_features_v3 if is_v3 else modify_features_v21
 
     new_dataset = modify_features(
         dataset=dataset,
