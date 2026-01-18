@@ -35,9 +35,9 @@ import pyarrow.parquet as pq
 import torch
 from tqdm import tqdm
 
-from lerobot.common.datasets.compute_stats import aggregate_stats
-from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadataV3, LeRobotDatasetV3
-from lerobot.common.datasets.utils import (
+from lerobot.common.datasets.v3.compute_stats import aggregate_stats
+from lerobot.common.datasets.lerobot_dataset_v3 import LeRobotDatasetMetadataV3, LeRobotDatasetV3
+from lerobot.common.datasets.v3.utils import (
     DATA_DIR,
     DEFAULT_CHUNK_SIZE,
     DEFAULT_DATA_FILE_SIZE_IN_MB,
@@ -46,10 +46,9 @@ from lerobot.common.datasets.utils import (
     get_parquet_file_size_in_mb,
     load_episodes,
     update_chunk_file_indices,
-    write_info,
-    write_stats,
     write_tasks,
 )
+from lerobot.common.datasets.utils import write_info, write_stats
 from lerobot.common.datasets.v3.aggregate import aggregate_datasets
 from lerobot.common.utils.constants import HF_LEROBOT_HOME
 

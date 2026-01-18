@@ -9,9 +9,9 @@ during training without any additional loading mechanism.
 
 Usage:
     python lerobot/scripts/annotate_instruction_rewards.py \
-        --input_repo_id lerobot/pusht \
+        --input_repo_id thomas0829/eval_put_the_doll_into_the_box \
         --output_dir ./datasets/ \
-        --output_repo_id pusht_with_advantages \
+        --output_repo_id put_the_doll_into_the_box_adv \
         --model_name Qwen/Qwen3-VL-8B-Instruct
 """
 
@@ -21,12 +21,12 @@ from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+from loguru import logger
+from opengvl.utils.logging_config import setup_logging
 
 def parse_args():
+    # Configure logging format
+    setup_logging(level="INFO", format_type="detailed")
     parser = argparse.ArgumentParser(
         description="Annotate LeRobot datasets with instruction rewards stored directly in parquet"
     )
@@ -208,7 +208,8 @@ def compute_advantages_for_episode(
     if prefix_lengths[-1] != len(frames):
         prefix_lengths.append(len(frames))
 
-    for t in tqdm(prefix_lengths, desc="Computing chunk rewards", leave=False):
+    for t in tqdm(prefix_lengths, desc="Computing chunk rewards"):
+        logger.info(f"Computing reward for prefix length {t}")
         prefix_frames = frames[:t]
         try:
             result = client.compute_instruction_reward(
@@ -316,9 +317,11 @@ def annotate_dataset(
     # Compute advantages for all episodes
     all_advantages = []
 
-    for ep_idx in tqdm(range(num_episodes), desc=f"Annotating {input_repo_id}"):
+    for ep_idx in range(num_episodes):
+        logger.info(f"Annotating episode {ep_idx+1}/{num_episodes}")
         try:
             # Extract frames
+            breakpoint()
             frames, instruction, sampled_indices, ep_total_frames = extract_frames_from_episode(
                 dataset, ep_idx, sample_interval
             )

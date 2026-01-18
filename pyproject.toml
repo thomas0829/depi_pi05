@@ -58,6 +58,8 @@ dependencies = [
     "torchdata>=0.11.0",
     "safetensors==0.6.2",
     "pre-commit>=4.3.0",
+    "loguru>=0.7.0",
+    "qwen_vl_utils"
 ]
 
 [project.optional-dependencies]
@@ -91,7 +93,7 @@ exclude_dirs = [
     "tests",
     "benchmarks",
     "lerobot/common/datasets/push_dataset_to_hub",
-    "lerobot/common/datasets/v2/convert_dataset_v1_to_v2",
+    "lerobot/common/datasets/conversion_scripts/convert_dataset_v1_to_v2",
     "lerobot/common/policies/pi0/conversion_scripts",
     "lerobot/scripts/push_dataset_to_hub.py",
 ]
@@ -111,6 +113,6 @@ default.extend-ignore-identifiers-re = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["lerobot*", "data_ids*"]
+include = ["lerobot*", "data_ids*", "opengvl*"]
 exclude = ["media*", "outputs*", "slurm_out*", "slurm_scripts*",
            "so100_data*"]
