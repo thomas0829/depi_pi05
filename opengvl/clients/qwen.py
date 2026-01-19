@@ -24,7 +24,10 @@ class QwenClient(BaseModelClient):
     ):
         super().__init__(rpm=rpm)
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            model_name, torch_dtype="auto", device_map="auto"
+            model_name,
+            torch_dtype="auto",
+            device_map="auto",
+            attn_implementation="flash_attention_2",
         )
         self.processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
         logger.info(type(self.processor))
