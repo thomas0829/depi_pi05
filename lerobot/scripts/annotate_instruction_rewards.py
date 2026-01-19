@@ -98,6 +98,28 @@ def parse_args():
         default=None,
         help="Root directory for input dataset (default: HF cache)",
     )
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Upload the annotated dataset to the Hugging Face Hub after creation.",
+    )
+    parser.add_argument(
+        "--hf_repo_id",
+        type=str,
+        default=None,
+        help="Target HF dataset repo id for upload (defaults to output_repo_id).",
+    )
+    parser.add_argument(
+        "--hf_token",
+        type=str,
+        default=None,
+        help="Hugging Face token for uploading (defaults to cached token).",
+    )
+    parser.add_argument(
+        "--private",
+        action="store_true",
+        help="Create the target Hub dataset as private.",
+    )
     return parser.parse_args()
 
 
@@ -287,6 +309,10 @@ def annotate_dataset(
     sample_interval: int = 1,
     reward_stride: int = 50,
     input_root: str | None = None,
+    push_to_hub: bool = False,
+    hf_repo_id: str | None = None,
+    hf_token: str | None = None,
+    private: bool = False,
 ):
     """Annotate a LeRobot dataset with instruction rewards stored in parquet."""
 
@@ -352,12 +378,13 @@ def annotate_dataset(
 
             # Log advantage statistics for visibility
             logger.info(
-                "Episode %d advantage stats — min: %.4f, max: %.4f, mean: %.4f, voc: %.4f",
-                ep_idx,
-                float(ep_advantages.min(initial=0.0)),
-                float(ep_advantages.max(initial=0.0)),
-                float(ep_advantages.mean(initial=0.0)),
-                float(voc_score),
+                "Episode {} advantage stats — min: {:.4f}, max: {:.4f}, mean: {:.4f}, voc: {:.4f}".format(
+                    ep_idx,
+                    float(ep_advantages.min()),
+                    float(ep_advantages.max()),
+                    float(ep_advantages.mean()),
+                    float(voc_score),
+                )
             )
 
         all_advantages.append(ep_advantages)
@@ -406,6 +433,24 @@ def annotate_dataset(
     else:
         logger.warning("'advantage' not found in sample!")
 
+    if push_to_hub:
+        target_repo = hf_repo_id if hf_repo_id is not None else output_repo_id
+        try:
+            from huggingface_hub import HfApi
+
+            api = HfApi(token=hf_token)
+            api.create_repo(repo_id=target_repo, repo_type="dataset", private=private, exist_ok=True)
+            api.upload_folder(
+                repo_id=target_repo,
+                repo_type="dataset",
+                folder_path=str(new_dataset.root),
+                token=hf_token,
+                commit_message="Add advantage annotations",
+            )
+            logger.info(f"Uploaded dataset to hub: {target_repo}")
+        except Exception as e:
+            logger.error(f"Failed to upload dataset to hub ({target_repo}): {e}")
+
     return new_dataset
 
 
@@ -438,6 +483,10 @@ def main():
             sample_interval=args.sample_interval,
             reward_stride=args.reward_stride,
             input_root=args.input_root,
+            push_to_hub=args.push_to_hub,
+            hf_repo_id=args.hf_repo_id,
+            hf_token=args.hf_token,
+            private=args.private,
         )
     except Exception as e:
         logger.error(f"Failed to annotate {args.input_repo_id}: {e}")
