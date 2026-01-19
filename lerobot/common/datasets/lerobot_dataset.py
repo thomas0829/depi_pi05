@@ -309,6 +309,7 @@ class LeRobotDataset(DatasetCommonMixin, torch.utils.data.Dataset):
         download_videos: bool = True,
         video_backend: str | None = None,
         use_annotated_tasks: bool = False,
+        advantage_postprocess: Callable[[dict], dict] | None = None,
     ):
         """
         2 modes are available for instantiating this class, depending on 2 different use cases:
@@ -423,6 +424,7 @@ class LeRobotDataset(DatasetCommonMixin, torch.utils.data.Dataset):
         self.video_backend = video_backend if video_backend else get_safe_default_codec()
         self.delta_indices = None
         self.use_annotated_tasks = use_annotated_tasks
+        self.advantage_postprocess = advantage_postprocess
 
         # Unused attributes
         self.image_writer = None
@@ -684,6 +686,9 @@ class LeRobotDataset(DatasetCommonMixin, torch.utils.data.Dataset):
             else:
                 task_idx = item["task_index"].item()
                 item["task"] = self.meta.tasks[task_idx]
+
+            if hasattr(self, "advantage_postprocess") and callable(self.advantage_postprocess):
+                item = self.advantage_postprocess(item)
 
             return item
         except Exception as e:
@@ -959,6 +964,7 @@ class MultiLeRobotDataset(torch.utils.data.Dataset):
         video_backend: str | None = None,
         force_cache_sync: bool = False,
         use_annotated_tasks: bool = False,
+        advantage_postprocess: Callable[[dict], dict] | None = None,
     ):
         super().__init__()
         self.root = Path(root) if root else HF_LEROBOT_HOME
@@ -991,6 +997,7 @@ class MultiLeRobotDataset(torch.utils.data.Dataset):
                     video_backend,
                     force_cache_sync,
                     use_annotated_tasks,
+                    advantage_postprocess,
                 )
                 if len(dataset.meta.camera_keys) <= 1:
                     continue
@@ -1035,6 +1042,7 @@ class MultiLeRobotDataset(torch.utils.data.Dataset):
 
         self.image_transforms = image_transforms
         self.delta_timestamps = delta_timestamps
+        self.advantage_postprocess = advantage_postprocess
 
     def _load_dataset_version_flexible(
         self,
@@ -1048,6 +1056,7 @@ class MultiLeRobotDataset(torch.utils.data.Dataset):
         video_backend: str | None,
         force_cache_sync: bool,
         use_annotated_tasks: bool,
+        advantage_postprocess: Callable[[dict], dict] | None,
     ) -> torch.utils.data.Dataset:
         """Instantiate a dataset, automatically selecting v2 or v3 implementation."""
 
@@ -1063,6 +1072,7 @@ class MultiLeRobotDataset(torch.utils.data.Dataset):
                 video_backend=video_backend,
                 force_cache_sync=force_cache_sync,
                 use_annotated_tasks=use_annotated_tasks,
+                advantage_postprocess=advantage_postprocess,
             )
         except BackwardCompatibilityError:
             logging.info("Detected legacy dataset for %s; falling back to v2 loader.", repo_id)
@@ -1078,6 +1088,7 @@ class MultiLeRobotDataset(torch.utils.data.Dataset):
             video_backend=video_backend,
             force_cache_sync=force_cache_sync,
             use_annotated_tasks=use_annotated_tasks,
+            advantage_postprocess=advantage_postprocess,
         )
 
     def _standardize_image_keys(self, item: dict[str, any]) -> dict[str, any]:
@@ -1273,6 +1284,9 @@ class MultiLeRobotDataset(torch.utils.data.Dataset):
         item["dataset_index"] = torch.tensor(dataset_idx)
         # Standardize image keys before returning
         item = self._standardize_image_keys(item)
+
+        if hasattr(self, "advantage_postprocess") and callable(self.advantage_postprocess):
+            item = self.advantage_postprocess(item)
 
         return item
 

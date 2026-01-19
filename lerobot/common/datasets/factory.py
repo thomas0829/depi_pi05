@@ -15,6 +15,7 @@
 # limitations under the License.
 import json
 import logging
+from collections.abc import Callable
 from pprint import pformat
 
 import packaging.version
@@ -34,6 +35,7 @@ from lerobot.common.datasets.lerobot_dataset_v3 import (
 )
 from lerobot.common.datasets.streaming_dataset import StreamingLeRobotDatasetV3
 from lerobot.common.datasets.transforms import ImageTransforms
+from lerobot.common.datasets.utils import advantage_postprocess as default_advantage_postprocess
 from lerobot.common.datasets.utils import get_repo_versions
 from lerobot.common.utils.constants import ACTION, OBS_PREFIX, REWARD
 from lerobot.configs.policies import PreTrainedConfig
@@ -145,11 +147,15 @@ def load_delta_timestamps(
     return resolve_delta_timestamps(cfg.policy, ds_meta)
 
 
-def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDataset:
+def make_dataset(
+    cfg: TrainPipelineConfig,
+    advantage_postprocess: Callable[[dict], dict] | None = default_advantage_postprocess,
+) -> LeRobotDataset | MultiLeRobotDataset:
     """Handles the logic of setting up delta timestamps and image transforms before creating a dataset.
 
     Args:
         cfg (TrainPipelineConfig): A TrainPipelineConfig config which contains a DatasetConfig and a PreTrainedConfig.
+        advantage_postprocess (Callable[[dict], dict] | None): function to postprocess advantage values.
 
     Returns:
         LeRobotDataset | MultiLeRobotDataset: A dataset instance that can be either a single dataset or a collection of datasets.
@@ -176,6 +182,7 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
                     video_backend=cfg.dataset.video_backend,
                     force_cache_sync=cfg.dataset.force_cache_sync,
                     use_annotated_tasks=cfg.dataset.use_annotated_tasks,
+                    advantage_postprocess=advantage_postprocess,
                 )
             else:
                 dataset = StreamingLeRobotDatasetV3(
@@ -204,6 +211,7 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
                 video_backend=cfg.dataset.video_backend,
                 force_cache_sync=cfg.dataset.force_cache_sync,
                 use_annotated_tasks=cfg.dataset.use_annotated_tasks,
+                advantage_postprocess=advantage_postprocess,
             )
     else:
         # Handle multiple datasets
@@ -267,6 +275,7 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
             video_backend=cfg.dataset.video_backend,
             force_cache_sync=cfg.dataset.force_cache_sync,
             use_annotated_tasks=cfg.dataset.use_annotated_tasks,
+            advantage_postprocess=advantage_postprocess,
         )
         logging.info(
             "Multiple datasets were provided. Applied the following index mapping to the provided datasets: "

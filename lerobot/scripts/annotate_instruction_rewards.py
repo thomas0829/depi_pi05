@@ -22,7 +22,13 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 
+from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.common.datasets.lerobot_dataset_v3 import LeRobotDatasetV3
+from lerobot.common.datasets.v3.dataset_tools import modify_features as modify_features_v3
+from lerobot.common.datasets.v21.dataset_tools import modify_features as modify_features_v21
+from opengvl.clients.qwen import QwenClient
 from opengvl.utils.logging_config import setup_logging
+from opengvl.utils.metrics import spearman_dense_correlation
 
 
 def parse_args():
@@ -180,7 +186,7 @@ def compute_advantages_for_episode(
     fps: float = 2.0,
     reduction: str = "mean",
     reward_stride: int = 50,
-) -> np.ndarray:
+) -> tuple[np.ndarray, float]:
     """Compute instruction rewards and TD-style advantages for an episode.
 
     Args:
@@ -195,10 +201,10 @@ def compute_advantages_for_episode(
         reward_stride: Compute rewards every N sampled frames (>=1), then broadcast.
 
     Returns:
-        numpy array of advantages for ALL frames in the episode (not just sampled).
+        tuple: (advantages for ALL frames in the episode, VOC score over prefix rewards).
     """
     if len(frames) < 2:
-        return np.zeros(total_frames, dtype=np.float32)
+        return np.zeros(total_frames, dtype=np.float32), float("nan")
 
     prefix_rewards = []
 
@@ -227,7 +233,9 @@ def compute_advantages_for_episode(
             prefix_rewards.append(prefix_rewards[-1] if prefix_rewards else 0.0)
 
     if not prefix_rewards:
-        return np.zeros(total_frames, dtype=np.float32)
+        return np.zeros(total_frames, dtype=np.float32), float("nan")
+
+    voc_score = spearman_dense_correlation(prefix_rewards)
 
     # Map chunk rewards to each sampled frame; repeat the last reward for the final chunk.
     # Broadcast the last computed prefix reward forward until the next computed checkpoint.
@@ -259,17 +267,7 @@ def compute_advantages_for_episode(
         # Assign the advantage to all frames in this range
         all_advantages[local_idx:end_local_idx] = adv
 
-    # Normalize advantages per episode:
-    # 1) clip to [-0.5, 1]
-    # 2) rescale positive values so the maximum positive becomes 1 (if any positives exist)
-    if all_advantages.size > 0:
-        all_advantages = np.clip(all_advantages, -0.5, 1.0)
-        max_pos = float(all_advantages[all_advantages > 0].max(initial=0.0))
-        if max_pos > 0:
-            pos_mask = all_advantages > 0
-            all_advantages[pos_mask] = all_advantages[pos_mask] / max_pos
-
-    return all_advantages
+    return all_advantages, voc_score
 
 
 def annotate_dataset(
@@ -285,12 +283,6 @@ def annotate_dataset(
     input_root: str | None = None,
 ):
     """Annotate a LeRobot dataset with instruction rewards stored in parquet."""
-    # Import here to avoid circular imports and allow for PYTHONPATH setup
-    from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-    from lerobot.common.datasets.lerobot_dataset_v3 import LeRobotDatasetV3
-    from lerobot.common.datasets.v3.dataset_tools import modify_features as modify_features_v3
-    from lerobot.common.datasets.v21.dataset_tools import modify_features as modify_features_v21
-    from opengvl.clients.qwen import QwenClient
 
     # Load dataset
     logger.info(f"Loading dataset: {input_repo_id}")
@@ -338,8 +330,8 @@ def annotate_dataset(
             else:
                 start_idx = dataset.episode_data_index["from"].get(ep_idx, 0)
 
-            # Compute advantages
-            ep_advantages = compute_advantages_for_episode(
+            # Compute advantages and per-episode VOC
+            ep_advantages, voc_score = compute_advantages_for_episode(
                 client,
                 frames,
                 instruction,
@@ -349,6 +341,16 @@ def annotate_dataset(
                 fps=fps,
                 reduction=reduction,
                 reward_stride=reward_stride,
+            )
+
+            # Log advantage statistics for visibility
+            logger.info(
+                "Episode %d advantage stats — min: %.4f, max: %.4f, mean: %.4f, voc: %.4f",
+                ep_idx,
+                float(ep_advantages.min(initial=0.0)),
+                float(ep_advantages.max(initial=0.0)),
+                float(ep_advantages.mean(initial=0.0)),
+                float(voc_score),
             )
 
         all_advantages.append(ep_advantages)

@@ -488,6 +488,7 @@ class LeRobotDatasetV3(DatasetCommonMixin, torch.utils.data.Dataset):
         video_backend: str | None = None,
         batch_encoding_size: int = 1,
         use_annotated_tasks: bool = False,
+        advantage_postprocess: Callable[[dict], dict] | None = None,
     ):
         """
         2 modes are available for instantiating this class, depending on 2 different use cases:
@@ -616,6 +617,7 @@ class LeRobotDatasetV3(DatasetCommonMixin, torch.utils.data.Dataset):
         self.batch_encoding_size = batch_encoding_size
         self.use_annotated_tasks = use_annotated_tasks
         self.episodes_since_last_encoding = 0
+        self.advantage_postprocess = advantage_postprocess
 
         # Unused attributes
         self.image_writer = None
@@ -941,6 +943,9 @@ class LeRobotDatasetV3(DatasetCommonMixin, torch.utils.data.Dataset):
         else:
             task_idx = item["task_index"].item()
             item["task"] = self.meta.tasks.iloc[task_idx].name
+
+        if hasattr(self, "advantage_postprocess") and callable(self.advantage_postprocess):
+            item = self.advantage_postprocess(item)
 
         return item
 

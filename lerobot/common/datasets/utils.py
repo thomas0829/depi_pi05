@@ -869,6 +869,39 @@ def validate_feature_string(name: str, value: str):
     return ""
 
 
+def advantage_postprocess(item: dict) -> dict:
+    """Postprocess advantage values by clipping and rescaling.
+
+    This function clips advantages to [-0.5, 1.0] and rescales positive values
+    so that the maximum positive value becomes 1.0. This ensures consistent
+    advantage normalization across all datasets (v2 and v3).
+
+    Args:
+        item: A dictionary containing dataset items, potentially including an "advantage" key.
+
+    Returns:
+        The input dictionary with the "advantage" value processed (if present).
+    """
+    if "advantage" not in item:
+        return item
+
+    adv = item["advantage"]
+    # Ensure tensor
+    if not torch.is_tensor(adv):
+        adv = torch.tensor(adv)
+
+    # Clip to [-0.5, 1.0] then rescale positives so max positive becomes 1.
+    adv = torch.clamp(adv, min=-0.5, max=1.0)
+    if (adv > 0).any():
+        max_pos = adv[adv > 0].max()
+        adv = adv.clone()
+        pos_mask = adv > 0
+        adv[pos_mask] = adv[pos_mask] / max_pos
+
+    item["advantage"] = adv
+    return item
+
+
 def validate_episode_buffer(episode_buffer: dict, total_episodes: int, features: dict):
     if "size" not in episode_buffer:
         raise ValueError("size key not found in episode_buffer")
