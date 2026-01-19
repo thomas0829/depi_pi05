@@ -110,7 +110,7 @@ def extract_frames_from_episode(dataset, episode_index: int, sample_interval: in
         sample_interval: Sample every N-th frame for VLM evaluation.
 
     Returns:
-        Tuple of (frames_list, instruction_text, frame_indices, total_frames)
+        Tuple of (frames_list, instruction_text, frame_indices, total_frames, fps)
     """
     from lerobot.common.datasets.lerobot_dataset_v3 import LeRobotDatasetV3
     from lerobot.common.datasets.video_utils import decode_video_frames
@@ -173,7 +173,13 @@ def extract_frames_from_episode(dataset, episode_index: int, sample_interval: in
         task_idx = dataset.hf_dataset["task_index"][start_idx].item()
         instruction = dataset.meta.tasks[task_idx]
 
-    return frames, instruction, sampled_indices, total_frames
+    fps = None
+    if hasattr(dataset, "meta") and getattr(dataset.meta, "info", None):
+        fps = dataset.meta.info.get("fps")
+    elif hasattr(dataset, "info"):
+        fps = dataset.info.get("fps")
+
+    return frames, instruction, sampled_indices, total_frames, fps
 
 
 def compute_advantages_for_episode(
@@ -314,9 +320,10 @@ def annotate_dataset(
         logger.info(f"Annotating episode {ep_idx + 1}/{num_episodes}")
         # try:
         # Extract frames
-        frames, instruction, sampled_indices, ep_total_frames = extract_frames_from_episode(
+        frames, instruction, sampled_indices, ep_total_frames, ep_fps = extract_frames_from_episode(
             dataset, ep_idx, sample_interval
         )
+        fps_used = ep_fps if ep_fps is not None else fps
 
         if len(frames) < 2:
             logger.warning(f"Episode {ep_idx} has fewer than 2 frames, using zero advantages")
@@ -338,7 +345,7 @@ def annotate_dataset(
                 ep_total_frames,
                 sampled_indices,
                 start_idx,
-                fps=fps,
+                fps=fps_used,
                 reduction=reduction,
                 reward_stride=reward_stride,
             )
