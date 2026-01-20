@@ -9,9 +9,9 @@ during training without any additional loading mechanism.
 
 Usage:
     python lerobot/scripts/annotate_instruction_rewards.py \
-        --input_repo_id thomas0829/eval_put_the_doll_into_the_box \
+        --input_repo_id thomas0829/eval_put_the_doll_into_the_box_2 \
         --output_dir ./datasets_out/ \
-        --output_repo_id sengi/put_the_doll_into_the_box_adv \
+        --output_repo_id sengi/put_the_doll_into_the_box_2_adv \
         --model_name Qwen/Qwen3-VL-8B-Instruct \
         --push_to_hub \
         --reward_stride 50 \
@@ -117,12 +117,6 @@ def parse_args():
         "--hub_private",
         action="store_true",
         help="Create the hub dataset as private (defaults to public).",
-    )
-    parser.add_argument(
-        "--no_hub_push_videos",
-        dest="hub_push_videos",
-        action="store_false",
-        help="Do not upload videos when pushing to hub (default: upload videos).",
     )
     parser.add_argument(
         "--input_root",
@@ -313,7 +307,6 @@ def annotate_dataset(
     push_to_hub: bool = False,
     hub_branch: str | None = None,
     hub_private: bool = False,
-    hub_push_videos: bool = True,
     dry_run: bool = False,
 ):
     """Annotate a LeRobot dataset with instruction rewards stored in parquet."""
@@ -327,7 +320,6 @@ def annotate_dataset(
         logger.info("V3 loader failed, trying V2.1 loader...")
         dataset = LeRobotDataset(input_repo_id, root=input_root)
         is_v3 = False
-    breakpoint()
     num_episodes = (
         dataset.meta.total_episodes if hasattr(dataset.meta, "total_episodes") else dataset.num_episodes
     )
@@ -358,9 +350,7 @@ def annotate_dataset(
             )
             logger.warning(f"Episode {ep_idx} dry-run or fewer than 2 frames; skipping reward computation.")
             ep_advantages = (
-                np.full(ep_total_frames, 20.0, dtype=np.float32)
-                if dry_run
-                else np.zeros(ep_total_frames, dtype=np.float32)
+                np.full(ep_total_frames, 1.0, dtype=np.float32)
             )
             voc_score = float("nan")
         else:
@@ -388,6 +378,7 @@ def annotate_dataset(
                 reduction=reduction,
                 reward_stride=reward_stride,
             )
+            assert len(ep_advantages) == ep_total_frames, f"Advantage length mismatch, {len(ep_advantages)} vs {ep_total_frames}"
 
         # Log advantage statistics for visibility
         logger.info(
@@ -452,8 +443,8 @@ def annotate_dataset(
             new_dataset.push_to_hub(
                 branch=hub_branch,
                 private=hub_private,
-                push_videos=hub_push_videos,
-                tag_version=False,
+                push_videos=True,
+                tag_version=True,
             )
             logger.info(f"Pushed dataset to hub: {new_dataset.repo_id} (branch={hub_branch})")
         except Exception as e:
@@ -508,7 +499,6 @@ def main():
             push_to_hub=args.push_to_hub,
             hub_branch=args.hub_branch,
             hub_private=args.hub_private,
-            hub_push_videos=args.hub_push_videos,
             dry_run=args.dry_run,
         )
     except Exception as e:

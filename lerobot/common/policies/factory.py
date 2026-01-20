@@ -134,11 +134,11 @@ def make_policy(
         )
 
     policy_cls = get_policy_class(cfg.type)
-    compile = cfg.compiled
     if compile is not None:
         logging.warning(
             "`compile` argument in `make_policy` is deprecated. Please set `cfg.compiled` instead."
         )
+    compile = cfg.compiled
 
     kwargs = {}
     if ds_meta is not None:

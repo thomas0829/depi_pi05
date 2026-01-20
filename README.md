@@ -231,14 +231,14 @@ accelerate launch --num_processes=${n_gpus} lerobot/scripts/accelerate_train.py 
 
 Once training is done, upload the latest checkpoint with:
 ```bash
-huggingface-cli upload ${HF_USER}/pi0_so101_test \
+hf upload ${HF_USER}/pi0_so101_test \
   outputs/train/pi0_so101_test/checkpoints/last/pretrained_model
 ```
 
 You can also upload intermediate checkpoints with:
 ```bash
 CKPT=010000
-huggingface-cli upload ${HF_USER}/pi0_so101_test${CKPT} \
+hf upload ${HF_USER}/pi0_so101_test${CKPT} \
   outputs/train/pi0_so101_test/checkpoints/${CKPT}/pretrained_model
 ```
 

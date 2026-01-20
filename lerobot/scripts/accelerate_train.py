@@ -57,6 +57,7 @@ from lerobot.common.utils.wandb_utils import WandBLogger
 from lerobot.configs import parser
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.scripts.eval import eval_policy
+from dotenv import load_dotenv
 
 
 def update_policy(
@@ -460,4 +461,5 @@ def train(cfg: TrainPipelineConfig):
 
 
 if __name__ == "__main__":
+    load_dotenv(override=True)
     train()

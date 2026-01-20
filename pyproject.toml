@@ -60,7 +60,9 @@ dependencies = [
     "safetensors==0.6.2",
     "pre-commit>=4.3.0",
     "loguru>=0.7.0",
-    "qwen_vl_utils"
+    "qwen_vl_utils",
+    "pyserial>=3.5,<4.0",
+    "dotenv"
 ]
 
 [project.scripts]

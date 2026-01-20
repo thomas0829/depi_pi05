@@ -153,7 +153,7 @@ class DatasetCommonMixin:
                 logging.error(
                     f"Revision '{self.revision}' does not exist in dataset repo '{self.repo_id}'. Error: {e}"
                 )
-                self.revision = None
+                self.revision = "main"
         snapshot_download(
             self.repo_id,
             repo_type="dataset",

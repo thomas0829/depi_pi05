@@ -85,10 +85,7 @@ class PI0Config(PreTrainedConfig):
     scheduler_decay_steps: int = 30_000
     scheduler_decay_lr: float = 2.5e-6
 
-    # Advantage-weighted behavior cloning settings
-    # Clip negative advantages to this minimum value to prevent gradient reversal
-    # while still downweighting low-quality actions
-    advantage_clip_min: float = -0.5
+    advantage_clip_min: float = -0.5 # deprecated, IGNORE
 
     # TODO: Add EMA
 
