@@ -185,4 +185,4 @@ external/
 tmp*
 tmp_upstream/*
 AGENTS.md
-datasets/*
+datasets*/*

@@ -48,7 +48,12 @@ from lerobot.common.datasets.v3.utils import (
     update_chunk_file_indices,
     write_tasks,
 )
-from lerobot.common.datasets.utils import write_info, write_stats
+from lerobot.common.datasets.utils import (
+    write_info, 
+    write_stats, 
+    embed_images, 
+    get_hf_features_from_features
+)
 from lerobot.common.datasets.v3.aggregate import aggregate_datasets
 from lerobot.common.utils.constants import HF_LEROBOT_HOME
 
@@ -907,7 +912,6 @@ def _write_parquet(df: pd.DataFrame, path: Path, meta: LeRobotDatasetMetadataV3)
 
     This ensures images are properly embedded and the file can be loaded correctly by HF datasets.
     """
-    from .utils import embed_images, get_hf_features_from_features
 
     hf_features = get_hf_features_from_features(meta.features)
     ep_dataset = datasets.Dataset.from_dict(df.to_dict(orient="list"), features=hf_features, split="train")

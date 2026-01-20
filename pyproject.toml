@@ -104,6 +104,14 @@ exclude_dirs = [
 ]
 skips = ["B101", "B311", "B404", "B603"]
 
+[tool.uv]
+conflicts = [
+    [
+        { extra = "pi0" },
+        { extra = "pi05" },
+    ],
+]
+
 [tool.uv.extra-build-dependencies]
 flash-attn = ["torch==2.8.0", "wheel"]
 

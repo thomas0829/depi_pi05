@@ -11,13 +11,16 @@ Usage:
     python lerobot/scripts/annotate_instruction_rewards.py \
         --input_repo_id thomas0829/eval_put_the_doll_into_the_box \
         --output_dir ./datasets_out/ \
-        --output_repo_id put_the_doll_into_the_box_adv \
+        --output_repo_id sengi/put_the_doll_into_the_box_adv \
         --model_name Qwen/Qwen3-VL-8B-Instruct \
-        --push_to_hub
+        --push_to_hub \
+        --reward_stride 50 \
+        --dry_run
 """
 
 import argparse
 from pathlib import Path
+from sys import prefix
 
 import numpy as np
 from loguru import logger
@@ -30,7 +33,8 @@ from lerobot.common.datasets.v21.dataset_tools import modify_features as modify_
 from opengvl.clients.qwen import QwenClient
 from opengvl.utils.logging_config import setup_logging
 from opengvl.utils.metrics import spearman_dense_correlation
-
+from lerobot.common.constants import HF_LEROBOT_HOME
+import time
 
 def parse_args():
     # Configure logging format
@@ -129,7 +133,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def extract_frames_from_episode(dataset, episode_index: int, sample_interval: int = 1):
+def extract_frames_from_episode(dataset, episode_index: int, sample_interval: int = 1, dry_run: bool = False):
     """Extract frames using batch video decoding.
 
     Args:
@@ -155,6 +159,8 @@ def extract_frames_from_episode(dataset, episode_index: int, sample_interval: in
         end_idx = dataset.episode_data_index["to"][episode_index]
 
     total_frames = end_idx - start_idx
+    if dry_run:
+        return [], "", [], total_frames, None
     sampled_indices = list(range(start_idx, end_idx, sample_interval))
 
     # Get video key
@@ -268,20 +274,12 @@ def compute_advantages_for_episode(
 
     voc_score = spearman_dense_correlation(prefix_rewards)
 
-    # Map chunk rewards to each sampled frame; repeat the last reward for the final chunk.
-    # Broadcast the last computed prefix reward forward until the next computed checkpoint.
-    chunk_rewards = []
-    pref_idx = 0
-    for i in range(1, len(frames) + 1):
-        while pref_idx + 1 < len(prefix_lengths) and prefix_lengths[pref_idx + 1] <= i:
-            pref_idx += 1
-        chunk_rewards.append(prefix_rewards[pref_idx])
-
-    # Compute TD-style advantages for sampled frames
-    # advantage_t = R(frames[0:t+1]) - R(frames[0:t])
-    sampled_advantages = [0.0]  # First frame has no prior
-    for t in range(1, len(chunk_rewards)):
-        sampled_advantages.append(chunk_rewards[t] - chunk_rewards[t - 1])
+    sampled_advantages = []
+    for i in range(prefix_lengths[0]):
+        sampled_advantages.append(1.0)
+    for i in range(1, len(prefix_rewards)):
+        for j in range(prefix_lengths[i-1], prefix_lengths[i]):
+            sampled_advantages.append(prefix_rewards[i] - prefix_rewards[i-1])
 
     # Now interpolate advantages to all frames in the episode
     # Each sampled frame's advantage applies to itself and the frames until the next sample
@@ -329,7 +327,7 @@ def annotate_dataset(
         logger.info("V3 loader failed, trying V2.1 loader...")
         dataset = LeRobotDataset(input_repo_id, root=input_root)
         is_v3 = False
-
+    breakpoint()
     num_episodes = (
         dataset.meta.total_episodes if hasattr(dataset.meta, "total_episodes") else dataset.num_episodes
     )
@@ -353,12 +351,11 @@ def annotate_dataset(
         logger.info(f"Annotating episode {ep_idx + 1}/{num_episodes}")
         # try:
         # Extract frames
-        frames, instruction, sampled_indices, ep_total_frames, ep_fps = extract_frames_from_episode(
-            dataset, ep_idx, sample_interval
-        )
-        fps_used = ep_fps if ep_fps is not None else fps
 
         if dry_run:
+            frames, instruction, sampled_indices, ep_total_frames, ep_fps = extract_frames_from_episode(
+                dataset, ep_idx, sample_interval, dry_run=True
+            )
             logger.warning(f"Episode {ep_idx} dry-run or fewer than 2 frames; skipping reward computation.")
             ep_advantages = (
                 np.full(ep_total_frames, 20.0, dtype=np.float32)
@@ -367,6 +364,10 @@ def annotate_dataset(
             )
             voc_score = float("nan")
         else:
+            frames, instruction, sampled_indices, ep_total_frames, ep_fps = extract_frames_from_episode(
+                dataset, ep_idx, sample_interval
+            )
+            fps_used = ep_fps if ep_fps is not None else fps
             logger.info(f"Episode {ep_idx}: {ep_total_frames} frames, instruction: '{instruction[:50]}...'")
 
             # Get episode start index
@@ -426,6 +427,8 @@ def annotate_dataset(
             "Use a different --output_dir or --output_repo_id to avoid overwriting."
         )
 
+    if Path(output_dir).resolve().exists():
+        output_dir = Path(str(output_dir) + f"_{int(time.time())}")
     new_dataset = modify_features(
         dataset=dataset,
         add_features={"advantage": (advantages_array, {"dtype": "float32", "shape": (1,), "names": None})},
@@ -477,7 +480,6 @@ def main():
     logger.info(f"Output: {output_dir / output_repo_id}")
 
     # Early guard: avoid writing into the same directory as the source dataset.
-    from lerobot.common.constants import HF_LEROBOT_HOME
 
     output_path = (output_dir / output_repo_id).resolve()
     candidate_roots = []
