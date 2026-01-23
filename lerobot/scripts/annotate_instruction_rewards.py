@@ -280,11 +280,11 @@ def compute_advantages_for_episode(
     voc_score = spearman_dense_correlation(prefix_rewards)
 
     sampled_advantages = []
-    for i in range(prefix_lengths[0]):
-        sampled_advantages.append(1.0)
     for i in range(1, len(prefix_rewards)):
         for j in range(prefix_lengths[i-1], prefix_lengths[i]):
             sampled_advantages.append((prefix_rewards[i] - prefix_rewards[i-1]) / np.abs(prefix_rewards[i-1] + 1e-8))
+    placeholder_advantage = sampled_advantages[0]
+    sampled_advantages = [placeholder_advantage] * prefix_lengths[0] + sampled_advantages
 
     # Now interpolate advantages to all frames in the episode
     # Each sampled frame's advantage applies to itself and the frames until the next sample
