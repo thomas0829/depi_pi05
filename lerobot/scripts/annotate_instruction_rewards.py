@@ -256,8 +256,8 @@ def compute_advantages_for_episode(
 
     # Compute reward once per chunk boundary (sampled frame) with optional stride.
     prefix_lengths = list(range(1, total_frames, max(reward_stride, 1)))
-    if prefix_lengths[-1] != len(frames):
-        prefix_lengths.append(len(frames))
+    if prefix_lengths[-1] != total_frames:
+        prefix_lengths.append(total_frames)
 
     for t in tqdm(prefix_lengths, desc="Computing chunk rewards"):
         logger.info(f"Computing reward for prefix length {t}")
