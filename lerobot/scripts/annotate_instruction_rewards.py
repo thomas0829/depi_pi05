@@ -279,10 +279,14 @@ def compute_advantages_for_episode(
 
     voc_score = spearman_dense_correlation(prefix_rewards)
 
+    prefix_rewards = np.array(prefix_rewards)
+    prefix_rewards = prefix_rewards - np.min(prefix_rewards)
+    prefix_rewards = prefix_rewards / np.max(prefix_rewards)
+    tau = 1.0
     sampled_advantages = []
     for i in range(1, len(prefix_rewards)):
         for j in range(prefix_lengths[i-1], prefix_lengths[i]):
-            sampled_advantages.append((prefix_rewards[i] - prefix_rewards[i-1]) / np.abs(prefix_rewards[i-1] + 1e-8))
+            sampled_advantages.append(np.exp((prefix_rewards[i] - prefix_rewards[i-1]) * tau))
     placeholder_advantage = sampled_advantages[0]
     sampled_advantages = [placeholder_advantage] * prefix_lengths[0] + sampled_advantages
 
