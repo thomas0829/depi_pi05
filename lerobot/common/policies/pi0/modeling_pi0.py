@@ -334,14 +334,14 @@ class PI0Policy(PreTrainedPolicy):
 
         # Apply advantage weighting if available
         if "advantage" in batch:
-            advantages = batch["advantage"]  # shape: (batch_size,)
+            advantages = batch["advantage"]  # shape: (batch_size, n_action_steps)
 
             # Log raw advantage statistics before clipping
             loss_dict["mean_advantage_raw"] = advantages.mean().item()
             loss_dict["pos_advantage_frac"] = (advantages > 0).float().mean().item()
 
             # Expand to match loss shape (batch_size, n_action_steps, action_dim)
-            weights = advantages[:, None, None].expand_as(losses)
+            weights = advantages[:, :, None].expand_as(losses)
             losses = losses * weights
 
             loss_dict["mean_weight"] = weights.mean().item()

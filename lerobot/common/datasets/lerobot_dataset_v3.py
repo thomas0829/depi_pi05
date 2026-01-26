@@ -922,6 +922,11 @@ class LeRobotDatasetV3(DatasetCommonMixin, torch.utils.data.Dataset):
             for key, val in query_result.items():
                 item[key] = val
 
+            # Query advantage using action indices so each action step has its own advantage
+            if "action" in query_indices and "advantage" in self.hf_dataset.features:
+                advantage_data = self.hf_dataset.select(query_indices["action"])["advantage"]
+                item["advantage"] = torch.stack(list(advantage_data)).squeeze(-1)
+
         if len(self.meta.video_keys) > 0:
             current_ts = item["timestamp"].item()
             query_timestamps = self._get_query_timestamps(current_ts, query_indices)

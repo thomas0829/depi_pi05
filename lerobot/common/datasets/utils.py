@@ -892,7 +892,7 @@ def advantage_postprocess(item: dict) -> dict:
 
     # breakpoint()
     # Clip to [0.0, 1.0] then rescale positives so max positive becomes 1.
-    adv = torch.clamp(adv, min=0.0, max=1.0)
+    adv = torch.clamp(adv, min=0.0, max=2.0)
 
     item["advantage"] = adv
     return item
